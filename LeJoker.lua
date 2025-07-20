@@ -2,7 +2,7 @@
 --- MOD_NAME: LeJoker
 --- MOD_ID: LeJoker
 --- MOD_AUTHOR: [YourNameHere]
---- MOD_DESCRIPTION: A simple LeBron-inspired Joker that gives +4 Mult.
+--- MOD_DESCRIPTION: A Joker that gives ×4 Mult to Kings of Spades or Clubs.
 
 ----------------------------------------------
 ------------MOD CODE -------------------------
@@ -92,27 +92,43 @@ function SMODS.INIT.LeJoker()
     }, {
         name = "LeJoker",
         text = {
-            "Gives {C:mult}+4{} Mult"
+            "Each played Black King gives {X:mult,C:white}X4 {} Mult"
         }
     })
 
     refresh_items()
 end
 
--- Extend calculate_joker to add +4 mult
+-- Joker effect: ×4 multiplier for King of Spades or Clubs
 local calculate_jokerref = Card.calculate_joker
 function Card:calculate_joker(context)
     local ret_val = calculate_jokerref(self, context)
+
+    -- Only apply for LeJoker and not debuffed
     if self.ability.set == "Joker" and self.ability.name == "LeJoker" and not self.debuff then
-        if context.individual and context.cardarea == G.play then
-            return {
-                mult = 4,
-                card = self
-            }
+        -- Only act during scoring phase
+        if context and context.cardarea == G.play then
+            -- Determine which card is being scored
+            local card = context.other_card or context.card or nil
+
+            -- Make sure it's a valid card object
+            if type(card) == "table" and card.get_id and card.base and card.base.suit then
+                local is_king = card:get_id() == 13
+                local is_clubs_or_spades = card.base.suit == "Clubs" or card.base.suit == "Spades"
+
+                if is_king and is_clubs_or_spades then
+                    return {
+                        Xmult_mod = 4,
+                        card = self
+                    }
+                end
+            end
         end
     end
+
     return ret_val
 end
+
 
 -- Track LeJoker ownership in save
 local add_to_deck_ref = Card.add_to_deck
