@@ -1,7 +1,7 @@
 --- STEAMODDED HEADER
 --- MOD_NAME: LeJoker
 --- MOD_ID: LeJoker
---- MOD_AUTHOR: [YourNameHere]
+--- MOD_AUTHOR: jagodben
 --- MOD_DESCRIPTION: A Joker that starts at X1 Mult and adds X0.23 Mult for each King of Spades or Clubs played.
 
 ----------------------------------------------
@@ -86,10 +86,12 @@ function SMODS.INIT.LeJoker()
         cost = 4,
         name = "LeJoker",
         set = "Joker",
-        -- Moved 'extra' directly here, out of 'config'
-        extra = {
-            current_Xmult = 1, -- Initial multiplier
-            Xmult_mod = 0.23, -- Amount to add each time
+        -- Re-introducing 'config' table and nesting 'extra' inside it
+        config = {
+            extra = {
+                current_Xmult = 1, -- Initial multiplier
+                Xmult_mod = 0.23, -- Amount to add each time
+            }
         }
     }, {
         name = "LeJoker",
@@ -105,19 +107,21 @@ function SMODS.INIT.LeJoker()
     local generate_UIBox_ability_tableref = Card.generate_UIBox_ability_table
     function Card:generate_UIBox_ability_table()
         if self.ability.set == 'Joker' and self.ability.name == 'LeJoker' then
-            -- Defensive check: Ensure self.ability.extra is a table and has the necessary fields
-            if type(self.ability.extra) ~= "table" or self.ability.extra.current_Xmult == nil or self.ability.extra.Xmult_mod == nil then
-                sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.extra in UI due to unexpected state.")
-                self.ability.extra = {
+            -- Defensive check: Ensure self.ability.config and self.ability.config.extra are tables
+            if type(self.ability.config) ~= "table" or type(self.ability.config.extra) ~= "table" or 
+               self.ability.config.extra.current_Xmult == nil or self.ability.config.extra.Xmult_mod == nil then
+                sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.config.extra in UI due to unexpected state.")
+                self.ability.config = self.ability.config or {} -- Ensure config exists
+                self.ability.config.extra = {
                     current_Xmult = 1,
                     Xmult_mod = 0.23,
                 }
             end
 
-            -- Access 'extra' directly from self.ability
+            -- Access 'extra' via self.ability.config.extra
             local loc_vars = {
-                self.ability.extra.Xmult_mod,
-                self.ability.extra.current_Xmult
+                self.ability.config.extra.Xmult_mod,
+                self.ability.config.extra.current_Xmult
             }
 
             local badges = {}
@@ -145,8 +149,6 @@ function SMODS.INIT.LeJoker()
             end
 
             -- Return here if it's LeJoker, so the original function isn't called again for this card
-            -- Note: self.config.center is still used here, as 'config' is part of the base Card structure
-            -- and 'center' refers to the visual data, not the dynamic ability data.
             return generate_card_ui(self.config.center, nil, loc_vars, card_type, badges, nil, nil, nil)
         else
             -- If it's not LeJoker, call the original function to handle its UI
@@ -162,16 +164,26 @@ function Card:calculate_joker(context)
 
     -- Only apply for LeJoker and not debuffed
     if self.ability.set == "Joker" and self.ability.name == "LeJoker" and not self.debuff then
-        -- Defensive check: Ensure self.ability.extra is a table and has the necessary fields
-        if type(self.ability.extra) ~= "table" or self.ability.extra.current_Xmult == nil or self.ability.extra.Xmult_mod == nil then
-            sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.extra in calculate_joker due to unexpected state.")
-            self.ability.extra = {
+        -- Defensive check: Ensure self.ability.config and self.ability.config.extra are tables
+        if type(self.ability.config) ~= "table" or type(self.ability.config.extra) ~= "table" or 
+           self.ability.config.extra.current_Xmult == nil or self.ability.config.extra.Xmult_mod == nil then
+            sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.config.extra in calculate_joker due to unexpected state.")
+            self.ability.config = self.ability.config or {} -- Ensure config exists
+            self.ability.config.extra = {
                 current_Xmult = 1,
                 Xmult_mod = 0.23,
             }
         end
 
-        sendDebugMessage("LeJoker: calculate_joker called for LeJoker. Current Xmult: " .. tostring(self.ability.extra.current_Xmult))
+        sendDebugMessage("LeJoker: calculate_joker called for LeJoker. Current Xmult: " .. tostring(self.ability.config.extra.current_Xmult))
+        sendDebugMessage("LeJoker: self.ability structure: " .. tostring(self.ability))
+        if self.config then
+            sendDebugMessage("LeJoker: self.config structure: " .. tostring(self.config))
+        else
+            sendDebugMessage("LeJoker: self.config is NIL.")
+        end
+
+
         -- Only act during scoring phase
         if context and context.cardarea == G.play then
             -- Determine which card is being scored
@@ -186,12 +198,12 @@ function Card:calculate_joker(context)
 
                 if is_king and is_clubs_or_spades then
                     -- Increment the current multiplier
-                    self.ability.extra.current_Xmult = self.ability.extra.current_Xmult + self.ability.extra.Xmult_mod
-                    sendDebugMessage("LeJoker: Black King triggered! New Xmult: " .. tostring(self.ability.extra.current_Xmult))
+                    self.ability.config.extra.current_Xmult = self.ability.config.extra.current_Xmult + self.ability.config.extra.Xmult_mod
+                    sendDebugMessage("LeJoker: Black King triggered! New Xmult: " .. tostring(self.ability.config.extra.current_Xmult))
                     
                     -- Return the updated multiplier
                     return {
-                        Xmult_mod = self.ability.extra.current_Xmult,
+                        Xmult_mod = self.ability.config.extra.current_Xmult,
                         card = self,
                         message = localize('k_upgrade_ex') -- Use a generic upgrade message
                     }
