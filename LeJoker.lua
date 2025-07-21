@@ -1,7 +1,7 @@
 --- STEAMODDED HEADER
 --- MOD_NAME: LeJoker
 --- MOD_ID: LeJoker
---- MOD_AUTHOR: jagodben
+--- MOD_AUTHOR: [YourNameHere]
 --- MOD_DESCRIPTION: A Joker that starts at X1 Mult and adds X0.23 Mult for each King of Spades or Clubs played.
 
 ----------------------------------------------
@@ -164,6 +164,8 @@ function Card:calculate_joker(context)
 
     -- Only apply for LeJoker and not debuffed
     if self.ability.set == "Joker" and self.ability.name == "LeJoker" and not self.debuff then
+        sendDebugMessage("LeJoker: Entering calculate_joker. Context repetition: " .. tostring(context.repetition))
+
         -- Defensive check: Ensure self.ability.config and self.ability.config.extra are tables
         if type(self.ability.config) ~= "table" or type(self.ability.config.extra) ~= "table" or 
            self.ability.config.extra.current_Xmult == nil or self.ability.config.extra.Xmult_mod == nil then
@@ -184,8 +186,10 @@ function Card:calculate_joker(context)
         end
 
 
-        -- Only act during scoring phase
-        if context and context.cardarea == G.play then
+        -- Only act during scoring phase AND if not a repetition call
+        -- The 'not context.repetition' ensures the effect only triggers once per scoring instance.
+        if context and context.cardarea == G.play and not context.repetition then
+            sendDebugMessage("LeJoker: Condition met for incrementing multiplier.")
             -- Determine which card is being scored
             local card = context.other_card or context.card or nil
 
@@ -197,6 +201,7 @@ function Card:calculate_joker(context)
                 sendDebugMessage("LeJoker: Card being scored - ID: " .. tostring(card:get_id()) .. ", Suit: " .. tostring(card.base.suit))
 
                 if is_king and is_clubs_or_spades then
+                    sendDebugMessage("LeJoker: Black King detected! Incrementing Xmult.")
                     -- Increment the current multiplier
                     self.ability.config.extra.current_Xmult = self.ability.config.extra.current_Xmult + self.ability.config.extra.Xmult_mod
                     sendDebugMessage("LeJoker: Black King triggered! New Xmult: " .. tostring(self.ability.config.extra.current_Xmult))
