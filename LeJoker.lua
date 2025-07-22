@@ -1,7 +1,7 @@
 --- STEAMODDED HEADER
 --- MOD_NAME: LeJoker
 --- MOD_ID: LeJoker
---- MOD_AUTHOR: jagodben
+--- MOD_AUTHOR: [YourNameHere]
 --- MOD_DESCRIPTION: A Joker that starts at X1 Mult and adds X0.23 Mult for each King of Spades or Clubs played.
 
 ----------------------------------------------
