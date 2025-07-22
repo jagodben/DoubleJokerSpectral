@@ -1,7 +1,7 @@
 --- STEAMODDED HEADER
 --- MOD_NAME: LeJoker
 --- MOD_ID: LeJoker
---- MOD_AUTHOR: [YourNameHere]
+--- MOD_AUTHOR: jagodben
 --- MOD_DESCRIPTION: A Joker that starts at X1 Mult and adds X0.23 Mult for each King of Spades or Clubs played.
 
 ----------------------------------------------
@@ -24,26 +24,7 @@ function Card:set_sprites(_center, _front)
     end
 end
 
--- Function to add new item (Joker) with sprite and localization
-function add_item(mod_id, pool, id, data, desc)
-    data.pos = { x = 0, y = 0 }
-    data.key = id
-    data.atlas = mod_id .. id
-    SMODS.Sprite:new(mod_id .. id, SMODS.findModByID(mod_id).path, id .. ".png", 71, 95, "asset_atli"):register()
-
-    data.key = id
-    data.order = #G.P_CENTER_POOLS[pool] + 1
-    G.P_CENTERS[id] = data
-    table.insert(G.P_CENTER_POOLS[pool], data)
-
-    if pool == "Joker" then
-        table.insert(G.P_JOKER_RARITY_POOLS[data.rarity], data)
-    end
-
-    G.localization.descriptions[pool][id] = desc
-end
-
--- Function to refresh sorting and localization
+-- Function to refresh sorting and localization (still useful if other items are added)
 function refresh_items()
     for k, v in pairs(G.P_CENTER_POOLS) do
         table.sort(v, function(a, b) return a.order < b.order end)
@@ -79,49 +60,59 @@ end
 
 -- Joker initialization
 function SMODS.INIT.LeJoker()
-    add_item(MOD_ID, "Joker", "j_lejoker", {
-        unlocked = true,
-        discovered = true,
-        rarity = 1,
-        cost = 4,
-        name = "LeJoker",
-        set = "Joker",
-        -- Re-introducing 'config' table and nesting 'extra' inside it
-        config = {
-            extra = {
-                current_Xmult = 1, -- Initial multiplier
-                Xmult_mod = 0.23, -- Amount to add each time
-            }
-        }
-    }, {
+    -- Define localization directly for SMODS.Joker:new
+    local lejoker_localization = {
         name = "LeJoker",
         text = {
             "Each played Black King adds {X:mult,C:white}#1#X {} Mult",
             "Currently {X:mult,C:white}X#2# {} Mult"
         }
-    })
+    }
 
+    -- Create the Joker using SMODS.Joker:new
+    local lejoker = SMODS.Joker:new(
+        "LeJoker", -- Name
+        "j_lejoker", -- Key (ID)
+        { -- Ability Data (this becomes self.ability)
+            set = "Joker", -- Important for 'set' property
+            extra = { -- Our custom data, directly under ability data
+                current_Xmult = 1, -- Initial multiplier
+                Xmult_mod = 0.23, -- Amount to add each time
+            }
+        },
+        {x = 0, y = 0}, -- Sprite Position (for the card's visual center)
+        lejoker_localization, -- Localization data
+        1, -- Rarity (explicitly passed to SMODS.Joker:new)
+        4  -- Cost (explicitly passed to SMODS.Joker:new)
+    )
+
+    lejoker:register()
+
+    -- Register the sprite. The atlas will be 'j_lejoker' based on the key.
+    SMODS.Sprite:new("j_lejoker", SMODS.findModByID(MOD_ID).path, "j_lejoker.png", 71, 95, "asset_atli"):register()
+
+    -- The refresh_items() call after adding the Joker is now less critical
+    -- as SMODS.Joker:new handles registration, but keeping it won't hurt.
     refresh_items()
 
     -- Override the UI generation for LeJoker to display dynamic multiplier
     local generate_UIBox_ability_tableref = Card.generate_UIBox_ability_table
     function Card:generate_UIBox_ability_table()
         if self.ability.set == 'Joker' and self.ability.name == 'LeJoker' then
-            -- Defensive check: Ensure self.ability.config and self.ability.config.extra are tables
-            if type(self.ability.config) ~= "table" or type(self.ability.config.extra) ~= "table" or 
-               self.ability.config.extra.current_Xmult == nil or self.ability.config.extra.Xmult_mod == nil then
-                sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.config.extra in UI due to unexpected state.")
-                self.ability.config = self.ability.config or {} -- Ensure config exists
-                self.ability.config.extra = {
+            -- Defensive check: Ensure self.ability.extra is a table and has the necessary fields
+            if type(self.ability.extra) ~= "table" or 
+               self.ability.extra.current_Xmult == nil or self.ability.extra.Xmult_mod == nil then
+                sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.extra in UI due to unexpected state.")
+                self.ability.extra = {
                     current_Xmult = 1,
                     Xmult_mod = 0.23,
                 }
             end
 
-            -- Access 'extra' via self.ability.config.extra
+            -- Access 'extra' via self.ability.extra
             local loc_vars = {
-                self.ability.config.extra.Xmult_mod,
-                self.ability.config.extra.current_Xmult
+                self.ability.extra.Xmult_mod,
+                self.ability.extra.current_Xmult
             }
 
             local badges = {}
@@ -148,52 +139,59 @@ function SMODS.INIT.LeJoker()
                 loc_vars.sticker = self.sticker
             end
 
-            -- Return here if it's LeJoker, so the original function isn't called again for this card
+            -- generate_card_ui expects self.config.center for visual data.
             return generate_card_ui(self.config.center, nil, loc_vars, card_type, badges, nil, nil, nil)
         else
             -- If it's not LeJoker, call the original function to handle its UI
             return generate_UIBox_ability_tableref(self)
         end
     end
+
+    -- Define the Joker's primary calculate function for its Xmult contribution
+    SMODS.Jokers.j_lejoker.calculate = function(self, context)
+        sendDebugMessage("LeJoker: SMODS.Jokers.j_lejoker.calculate called. Current Xmult: " .. tostring(self.ability.extra.current_Xmult))
+        
+        -- Crucial: Only apply the multiplier at the very end of the calculation context
+        -- This prevents premature arithmetic on uninitialized global scoring variables.
+        if SMODS.end_calculate_context(context) then
+            sendDebugMessage("LeJoker: SMODS.Jokers.j_lejoker.calculate applying Xmult.")
+            return {
+                Xmult = self.ability.extra.current_Xmult, 
+                card = self
+            }
+        end
+        -- If not end_calculate_context, return nothing to avoid interfering with other calculations
+        return nil
+    end
 end
 
--- Joker effect: dynamic multiplier for King of Spades or Clubs
+-- Joker effect: This override is now ONLY for INCREMENTING the multiplier
+-- when a Black King is played. It does NOT return the Xmult for the hand.
 local calculate_jokerref = Card.calculate_joker
 function Card:calculate_joker(context)
-    local ret_val = calculate_jokerref(self, context)
+    -- Call original for other effects before our logic
+    local ret_val = calculate_jokerref(self, context) 
 
-    -- Only apply for LeJoker and not debuffed
+    -- Only process for LeJoker and if not debuffed
     if self.ability.set == "Joker" and self.ability.name == "LeJoker" and not self.debuff then
-        sendDebugMessage("LeJoker: Entering calculate_joker. Context repetition: " .. tostring(context.repetition))
+        sendDebugMessage("LeJoker: Entering Card:calculate_joker. Context repetition: " .. tostring(context.repetition))
 
-        -- Defensive check: Ensure self.ability.config and self.ability.config.extra are tables
-        if type(self.ability.config) ~= "table" or type(self.ability.config.extra) ~= "table" or 
-           self.ability.config.extra.current_Xmult == nil or self.ability.config.extra.Xmult_mod == nil then
-            sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.config.extra in calculate_joker due to unexpected state.")
-            self.ability.config = self.ability.config or {} -- Ensure config exists
-            self.ability.config.extra = {
+        -- Defensive check: Ensure self.ability.extra is a table and has the necessary fields
+        if type(self.ability.extra) ~= "table" or 
+           self.ability.extra.current_Xmult == nil or self.ability.extra.Xmult_mod == nil then
+            sendDebugMessage("LeJoker: Initializing/Re-initializing self.ability.extra in Card:calculate_joker due to unexpected state.")
+            self.ability.extra = {
                 current_Xmult = 1,
                 Xmult_mod = 0.23,
             }
         end
 
-        sendDebugMessage("LeJoker: calculate_joker called for LeJoker. Current Xmult: " .. tostring(self.ability.config.extra.current_Xmult))
-        sendDebugMessage("LeJoker: self.ability structure: " .. tostring(self.ability))
-        if self.config then
-            sendDebugMessage("LeJoker: self.config structure: " .. tostring(self.config))
-        else
-            sendDebugMessage("LeJoker: self.config is NIL.")
-        end
-
-
-        -- Only act during scoring phase AND if not a repetition call
-        -- The 'not context.repetition' ensures the effect only triggers once per scoring instance.
+        -- Logic for INCREMENTING the multiplier (only on King play and not repetition)
+        -- This part only modifies the Joker's internal state.
         if context and context.cardarea == G.play and not context.repetition then
-            sendDebugMessage("LeJoker: Condition met for incrementing multiplier.")
-            -- Determine which card is being scored
+            sendDebugMessage("LeJoker: Condition met for potentially incrementing multiplier (non-repetition).")
             local card = context.other_card or context.card or nil
 
-            -- Make sure it's a valid card object
             if type(card) == "table" and card.get_id and card.base and card.base.suit then
                 local is_king = card:get_id() == 13
                 local is_clubs_or_spades = card.base.suit == "Clubs" or card.base.suit == "Spades"
@@ -202,21 +200,16 @@ function Card:calculate_joker(context)
 
                 if is_king and is_clubs_or_spades then
                     sendDebugMessage("LeJoker: Black King detected! Incrementing Xmult.")
-                    -- Increment the current multiplier
-                    self.ability.config.extra.current_Xmult = self.ability.config.extra.current_Xmult + self.ability.config.extra.Xmult_mod
-                    sendDebugMessage("LeJoker: Black King triggered! New Xmult: " .. tostring(self.ability.config.extra.current_Xmult))
-                    
-                    -- Return the updated multiplier
-                    return {
-                        Xmult_mod = self.ability.config.extra.current_Xmult,
-                        card = self,
-                        message = localize('k_upgrade_ex') -- Use a generic upgrade message
-                    }
+                    self.ability.extra.current_Xmult = self.ability.extra.current_Xmult + self.ability.extra.Xmult_mod
+                    -- Return a message here if we want a visual pop-up when the multiplier increases
+                    return { message = localize('k_upgrade_ex'), card = self }
                 end
             end
         end
     end
 
+    -- Always return the original ret_val from the base function for other effects
+    -- This Joker's Xmult contribution is handled by SMODS.Jokers.j_lejoker.calculate
     return ret_val
 end
 
